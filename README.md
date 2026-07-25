@@ -7,6 +7,7 @@ The platform serves as the central operational backbone for coordinating hydropo
 ## System Workflows
 
 LeafSync coordinates multi-party operations within an agritech supply network by providing dedicated workflows tailored to each participant's role:
+```
 
                   +------------------------------+
                   |         System Admin         |
@@ -26,6 +27,7 @@ LeafSync coordinates multi-party operations within an agritech supply network by
 |   Transport Driver   |
 | (Produce Collection) |
 +----------------------+
+```
 
 ## Core Operational Domains
 
