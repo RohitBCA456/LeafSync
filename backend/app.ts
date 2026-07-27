@@ -1,7 +1,7 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { CustomCorsOptions } from "./types/app.js";
+import { CustomCorsOptions } from "./types/app.type.js";
 
 dotenv.config({ path: "./.env" });
 
