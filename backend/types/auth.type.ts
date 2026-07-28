@@ -12,6 +12,9 @@ export interface BaseRegisterDTO {
   password: string;
   ph_number: string;
   avatar_url: string;
+  latitude: number;
+  longitude: number;
+  otp: string;
   verification_doc_type?: string;
   verification_doc_url?: string;
 }

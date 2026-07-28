@@ -2,6 +2,7 @@ import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { CustomCorsOptions } from "./types/app.type.js";
+import multer from "multer";
 
 dotenv.config({ path: "./.env" });
 
@@ -17,6 +18,12 @@ const corsOptions: CustomCorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+
+const storage = multer.memoryStorage();
+export const upload = multer({
+  storage,
+  limits: { fileSize: 5 * 1024 * 1024 },
+});
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;

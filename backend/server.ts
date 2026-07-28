@@ -1,24 +1,29 @@
 import { app } from "./app.js";
 import { pool } from "./src/config/db.config.js";
+import { connectRedis } from "./src/config/redis.config.js";
 
 const PORT: number = 5000;
 
-pool
-  .connect()
-  .then((client) => {
+async function startServer() {
+  try {
+    const client = await pool.connect();
     client.release();
-    console.log(`database is connected successfully!`);
+    console.log(`Database connected successfully!`);
+
+    await connectRedis();
 
     const server = app.listen(PORT, () => {
-      console.log(`server is listening on port: `, PORT);
+      console.log(`Server is listening on port: ${PORT}`);
     });
 
     server.on("error", (error: Error) => {
-      console.log(`error while connecting to the server!`);
-      throw error;
+      console.error(`Error while starting the server:`, error);
+      process.exit(1);
     });
-  })
-  .catch((error: Error) => {
-    console.log(`error while connecting to the database!`);
+  } catch (error) { 
+    console.error(`Failed to initialize application services:`, error);
     process.exit(1);
-  });
+  }
+}
+
+startServer();
