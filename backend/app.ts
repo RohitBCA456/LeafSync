@@ -1,10 +1,11 @@
 import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
-import { CustomCorsOptions } from "./types/app.type.js";
-import multer from "multer";
+import { CustomCorsOptions } from "./src/types/app.type.js";
+import { stgRouter } from "./src/routers/users.route.js";
+import path from "path";
 
-dotenv.config({ path: "./.env" });
+dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const app = express();
 
@@ -19,11 +20,7 @@ app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-const storage = multer.memoryStorage();
-export const upload = multer({
-  storage,
-  limits: { fileSize: 5 * 1024 * 1024 },
-});
+app.use("/api/v1/users", stgRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;

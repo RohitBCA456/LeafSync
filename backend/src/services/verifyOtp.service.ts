@@ -1,4 +1,4 @@
-import { redisClient } from "../config/redis.config";
+import { redisClient } from "../config/redis.config.js";
 
 export const verifyOtpCode = async (
   email: string,

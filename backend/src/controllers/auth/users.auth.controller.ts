@@ -1,16 +1,16 @@
 import { Request, Response, NextFunction } from "express";
-import { ApiError } from "../../utilities/ApiError.util";
+import { ApiError } from "../../utilities/ApiError.util.js";
 import bcrypt from "bcrypt";
-import { pool } from "../../config/db.config";
-import { ApiResponse } from "../../utilities/ApiResponse";
-import { asyncHandler } from "../../utilities/asyncHandler.util";
-import { RegisterStgDTO } from "../../../types/auth.type";
+import { pool } from "../../config/db.config.js";
+import { ApiResponse } from "../../utilities/ApiResponse.js";
+import { asyncHandler } from "../../utilities/asyncHandler.util.js";
+import { RegisterStgDTO } from "../../types/auth.type.js";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import { sendOtpEmail } from "../../services/otp.service";
-import { verifyOtpCode } from "../../services/verifyOtp.service";
+import { sendOtpEmail } from "../../services/otp.service.js";
+import { verifyOtpCode } from "../../services/verifyOtp.service.js";
 
-let s3Client = new S3Client({ region: process.env.AWS_REGION });
+let s3Client = new S3Client({ region: process.env.AWS_REGION || "ap-south-1" });
 
 export const register = asyncHandler(
   async (
@@ -18,11 +18,11 @@ export const register = asyncHandler(
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
-    const { name, email, password, ph_number, latitude, longitude, otp } =
+    const { name, email, password, ph_number, latitude, longitude, otp, role } =
       req.body;
 
     if (
-      [name, email, password, ph_number, otp].some(
+      [name, email, password, ph_number, otp, role].some(
         (field) => field.trim() === "",
       )
     ) {
@@ -43,24 +43,25 @@ export const register = asyncHandler(
 
     const result = await pool.query(
       `
-      INSERT INTO stg (
+      INSERT INTO users (
         name, 
         email, 
         password, 
         ph_number, 
         location,
+        role,
         is_email_verified
       ) 
-      VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), TRUE)
+      VALUES ($1, $2, $3, $4, ST_SetSRID(ST_MakePoint($5, $6), 4326), $7, TRUE)
       RETURNING 
-        stg_id, 
+        user_id, 
         name, 
         email, 
         ph_number, 
         ST_Y(location::geometry) AS latitude, 
         ST_X(location::geometry) AS longitude;
       `,
-      [name, email, hashPassword, ph_number, longitude, latitude],
+      [name, email, hashPassword, ph_number, longitude, latitude, role],
     );
 
     return res
@@ -77,12 +78,15 @@ export const uploadAvatarToS3 = asyncHandler(
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
-    const {
-      userId,
-      contentType,
-      fileExtension,
-    }: { userId: string; contentType: string; fileExtension: string } =
-      req.body;
+    const { userId }: { userId: string } = req.body;
+
+    const profile = req.file;
+
+    const contentType = profile?.mimetype;
+    const fileExtension = profile?.originalname
+      .split(".")
+      .pop()
+      ?.toLocaleLowerCase();
 
     const uniqueId = crypto.randomUUID();
 
@@ -98,6 +102,8 @@ export const uploadAvatarToS3 = asyncHandler(
       const presignedUrl = await getSignedUrl(s3Client, command, {
         expiresIn: 900,
       });
+
+      const fileUrl = `https://${process.env.BUCKET_NAME}.s3.${process.env.AWS_REGION}.amazonaws.com/uploads/users/profile/${userId}/${uniqueId}.png`;
 
       return res.status(201).json(
         new ApiResponse(
@@ -129,10 +135,10 @@ export const updateAvatarUrl = asyncHandler(
     try {
       const result = await pool.query(
         `
-        UPDATE stg 
+        UPDATE users 
         SET avatar_url = $1
-        WHERE stg_id = $2
-        RETURNING stg_id, avatar_url; 
+        WHERE user_id = $2
+        RETURNING user_id, avatar_url; 
         `,
         [fileUrl, userId],
       );

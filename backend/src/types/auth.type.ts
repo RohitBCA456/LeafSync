@@ -6,6 +6,8 @@ export type verification_doc =
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
+export type role = "STG" | "DRIVER" | "MANAGER";
+
 export interface BaseRegisterDTO {
   name: string;
   email: string;
@@ -15,7 +17,8 @@ export interface BaseRegisterDTO {
   latitude: number;
   longitude: number;
   otp: string;
-  verification_doc_type?: string;
+  role: role;
+  verification_doc_type?: verification_doc;
   verification_doc_url?: string;
 }
 
