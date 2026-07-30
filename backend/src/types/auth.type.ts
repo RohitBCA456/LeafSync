@@ -6,7 +6,7 @@ export type verification_doc =
 
 export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
 
-export type role = "STG" | "DRIVER" | "MANAGER";
+export type role = "stg" | "driver" | "manager";
 
 export interface BaseRegisterDTO {
   name: string;
@@ -18,6 +18,9 @@ export interface BaseRegisterDTO {
   longitude: number;
   otp: string;
   role: role;
+}
+
+export interface RegisterStgDDTO extends BaseRegisterDTO {
   verification_doc_type?: verification_doc;
   verification_doc_url?: string;
 }

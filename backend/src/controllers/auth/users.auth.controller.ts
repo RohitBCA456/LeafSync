@@ -4,7 +4,7 @@ import bcrypt from "bcrypt";
 import { pool } from "../../config/db.config.js";
 import { ApiResponse } from "../../utilities/ApiResponse.js";
 import { asyncHandler } from "../../utilities/asyncHandler.util.js";
-import { RegisterStgDTO } from "../../types/auth.type.js";
+import { BaseRegisterDTO } from "../../types/auth.type.js";
 import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { sendOtpEmail } from "../../services/otp.service.js";
@@ -14,7 +14,7 @@ let s3Client = new S3Client({ region: process.env.AWS_REGION || "ap-south-1" });
 
 export const register = asyncHandler(
   async (
-    req: Request<{}, {}, RegisterStgDTO>,
+    req: Request<{}, {}, BaseRegisterDTO>,
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
@@ -31,6 +31,18 @@ export const register = asyncHandler(
 
     if (!email.includes("@")) {
       return next(new ApiError(400, "not a valid email"));
+    }
+
+    const normalizedRole = role.toLowerCase();
+    const allowedRoles = ["stg", "driver", "manager"];
+
+    if (!allowedRoles.includes(normalizedRole)) {
+      return next(
+        new ApiError(
+          400,
+          `Invalid role. Allowed roles: ${allowedRoles.join(", ")}`,
+        ),
+      );
     }
 
     const isOtpValid = await verifyOtpCode(email, otp);
