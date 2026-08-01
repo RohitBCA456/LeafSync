@@ -4,6 +4,7 @@ import dotenv from "dotenv";
 import { CustomCorsOptions } from "./src/types/app.type.js";
 import { stgRouter } from "./src/routers/users.route.js";
 import path from "path";
+import cookieParser from "cookie-parser";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -19,6 +20,7 @@ const corsOptions: CustomCorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
+app.use(cookieParser());
 
 app.use("/api/v1/users", stgRouter);
 

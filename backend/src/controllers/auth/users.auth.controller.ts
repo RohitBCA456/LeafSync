@@ -9,6 +9,11 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { sendOtpEmail } from "../../services/otp.service.js";
 import { verifyOtpCode } from "../../services/verifyOtp.service.js";
+import {
+  generateAccessToken,
+  generateRefreshToken,
+  verifyRefreshToken,
+} from "../../utilities/token.util.js";
 
 let s3Client = new S3Client({ region: process.env.AWS_REGION || "ap-south-1" });
 
@@ -76,10 +81,33 @@ export const register = asyncHandler(
       [name, email, hashPassword, ph_number, longitude, latitude, role],
     );
 
+    const user = result.rows[0];
+
+    const tokenPayload = { userId: user.user_id, role: user.role };
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken(tokenPayload);
+
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await pool.query(
+      `UPDATE users SET refresh_token = $1 WHERE user_id = $2;`,
+      [hashedRefreshToken, user.user_id],
+    );
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
     return res
       .status(201)
       .json(
-        new ApiResponse(201, result.rows[0], "STG registered successfully"),
+        new ApiResponse(
+          201,
+          { user, accessToken },
+          "STG registered successfully",
+        ),
       );
   },
 );
@@ -90,7 +118,10 @@ export const uploadAvatarToS3 = asyncHandler(
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
-    const { userId }: { userId: string } = req.body;
+    if (!req.user) {
+      return next(new ApiError(401, "Unauthorized access"));
+    }
+    const { userId }: { userId: number } = req.user;
 
     const profile = req.file;
 
@@ -142,7 +173,12 @@ export const updateAvatarUrl = asyncHandler(
     res: Response,
     next: NextFunction,
   ): Promise<Response | void> => {
-    const { fileUrl, userId }: { fileUrl: string; userId: number } = req.body;
+    if (!req.user) {
+      return next(new ApiError(401, "Unauthorized access"));
+    }
+
+    const { fileUrl }: { fileUrl: string } = req.body;
+    const { userId }: { userId: number } = req.user;
 
     try {
       const result = await pool.query(
@@ -190,5 +226,131 @@ export const sendOtp = asyncHandler(
     return res
       .status(200)
       .json(new ApiResponse(200, null, "OTP code sent successfully"));
+  },
+);
+
+export const refreshAccessToken = asyncHandler(
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<Response | void> => {
+    const refreshToken = req.cookies.refreshToken || req.body.refreshToken;
+
+    if (!refreshToken) {
+      return next(new ApiError(401, "Refresh token is missing"));
+    }
+
+    try {
+      const decoded = verifyRefreshToken(refreshToken);
+
+      const userRes = await pool.query(
+        `SELECT user_id, role, refresh_token FROM users WHERE user_id = $1;`,
+        [decoded.userId],
+      );
+
+      const user = userRes.rows[0];
+      if (!user || !user.refresh_token) {
+        return next(new ApiError(403, "Invalid refresh token"));
+      }
+
+      const isMatched = await bcrypt.compare(refreshToken, user.refresh_token);
+      if (!isMatched) {
+        return next(new ApiError(403, "Invalid or reused refresh token"));
+      }
+
+      const newAccessToken = generateAccessToken({
+        userId: user.user_id,
+        role: user.role,
+      });
+
+      return res
+        .status(200)
+        .json(
+          new ApiResponse(
+            200,
+            { accessToken: newAccessToken },
+            "Token refreshed successfully",
+          ),
+        );
+    } catch (error) {
+      return next(new ApiError(401, "Invalid refresh token"));
+    }
+  },
+);
+
+export const login = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    const { email, password }: { email: string; password: string } = req.body;
+
+    if (!email || !password) {
+      return next(new ApiError(400, "Email and password are required"));
+    }
+
+    const userRes = await pool.query(
+      `
+      SELECT user_id, refresh_token, role, password FROM users WHERE email = $1;
+      `,
+      [email],
+    );
+
+    const user = userRes.rows[0];
+
+    if (!user) {
+      return next(new ApiError(401, "Invalid email or password"));
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.password);
+    if (!isPasswordValid) {
+      return next(new ApiError(401, "Invalid email or password"));
+    }
+
+    const tokenPayload = { userId: user.user_id, role: user.role };
+    const accessToken = generateAccessToken(tokenPayload);
+    const refreshToken = generateRefreshToken(tokenPayload);
+
+    const hashedRefreshToken = await bcrypt.hash(refreshToken, 10);
+    await pool.query(
+      `UPDATE users SET refresh_token = $1 WHERE user_id = $2;`,
+      [hashedRefreshToken, user.user_id],
+    );
+
+    res.cookie("refreshToken", refreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    delete user.password;
+    delete user.refresh_token;
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, { user, accessToken }, "Login successful"));
+  },
+);
+
+export const logout = asyncHandler(
+  async (req: Request, res: Response, next: NextFunction) => {
+    if (!req.user) {
+      return next(new ApiError(401, "Unauthorized"));
+    }
+    const { userId }: { userId: number } = req.user;
+
+    await pool.query(
+      `UPDATE users SET refresh_token = NULL WHERE user_id = $1;`,
+      [userId],
+    );
+
+    res.clearCookie("refreshToken", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: "strict",
+    });
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, null, "Logout successful"));
   },
 );
