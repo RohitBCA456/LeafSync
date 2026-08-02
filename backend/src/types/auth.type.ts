@@ -1,10 +1,10 @@
-export type verification_doc =
-  | "GOVT_ID"
+export type DocVerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
+export type VerificationDocType =
+  | "AADHAAR"
+  | "PAN"
+  | "VOTER_ID"
   | "DRIVING_LICENSE"
-  | "BUSINESS_PAN"
-  | "TAX_CERTIFICATE";
-
-export type VerificationStatus = "PENDING" | "VERIFIED" | "REJECTED";
+  | "FACTORY_LICENSE";
 
 export type role = "stg" | "driver" | "manager";
 
@@ -20,16 +20,14 @@ export interface BaseRegisterDTO {
   role: role;
 }
 
-export interface RegisterStgDDTO extends BaseRegisterDTO {
-  verification_doc_type?: verification_doc;
-  verification_doc_url?: string;
+export interface verifyStgDTO {
+  verification_doc_type: VerificationDocType;
+  verification_doc: Buffer;
 }
 
-export interface RegisterDriverDTO extends BaseRegisterDTO {
+export interface verifyDriverDTO {
   licenseNumber: string;
   vehicleType: string;
-}
-
-export interface RegisterStgDTO extends BaseRegisterDTO {
-  towerCapacity?: number;
+  verification_doc_type: VerificationDocType;
+  verification_doc: Buffer;
 }

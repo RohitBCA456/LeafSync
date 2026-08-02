@@ -8,5 +8,6 @@ CREATE TABLE IF NOT EXISTS users (
   avatar_url TEXT,
   location GEOGRAPHY(Point, 4326),
   is_email_verified BOOLEAN DEFAULT FALSE,
+  refresh_token TEXT DEFAULT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
