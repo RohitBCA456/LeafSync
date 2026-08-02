@@ -1,4 +1,4 @@
-# LeafSync Backend API
+# LeafSync Backend API(Development Phase)
 
 LeafSync is a role-based agritech supply chain and network management backend designed to streamline vertical farming logistics operations across four distinct organizational tiers: Administrators, Managers, Drivers, and Small Tower Growers (STG).
 
