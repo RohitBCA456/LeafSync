@@ -5,14 +5,14 @@ import { CustomCorsOptions } from "./src/types/app.type.js";
 import { userRouter } from "./src/routers/users.auth.route.js";
 import path from "path";
 import cookieParser from "cookie-parser";
-import { stgVerificationRouter } from "./src/routers/stg.verification.route.js";
+import { verificationRouter } from "./src/routers/verification.route.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
 const app = express();
 
 const corsOptions: CustomCorsOptions = {
-  origin: process.env.ORIGIN ?? "http://localhost:5173",
+  origin: process.env.ORIGIN ?? "http://localhost:5500",
   methods: ["GET", "POST", "PUT", "PATCH", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
   credentials: true,
@@ -21,10 +21,10 @@ const corsOptions: CustomCorsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
-app.use(cookieParser());
+app.use(cookieParser(process.env.COOKIE_SECRET));
 
 app.use("/api/v1/users", userRouter);
-app.use("/api/v1/stg/verification", stgVerificationRouter);
+app.use("/api/v1/verification", verificationRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;

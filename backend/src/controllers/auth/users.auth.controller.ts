@@ -317,8 +317,19 @@ export const login = asyncHandler(
 
     res.cookie("refreshToken", refreshToken, {
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "strict",
+      secure: true,
+      sameSite: "none",
+      path: "/",
+      signed:  true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    res.cookie("accessToken", accessToken, {
+      httpOnly: true,
+      secure: true,
+      sameSite: "none",
+      path: "/",
+      signed: true,
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 

@@ -11,9 +11,13 @@ import { ApiError } from "../utilities/ApiError.util.js";
 export const verifyJWT = asyncHandler(
   async (req: AuthRequest, res: Response, next: NextFunction) => {
     const authHeader = req.headers.authorization;
-    const token = authHeader?.startsWith("Bearer ")
+    const bearerToken = authHeader?.startsWith("Bearer ")
       ? authHeader.split(" ")[1]
       : null;
+
+    const cookieToken = req.signedCookies?.accessToken;
+
+    const token = bearerToken || cookieToken;
 
     if (!token) {
       return next(new ApiError(401, "Unauthorized access"));

@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>Login — DigiLocker Test</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 360px; margin: 80px auto; }
+  input { display: block; width: 100%; padding: 10px; margin: 8px 0; box-sizing: border-box; }
+  button { width: 100%; padding: 10px; background: #4f46e5; color: #fff; border: none; cursor: pointer; }
+  button:disabled { opacity: 0.6; cursor: not-allowed; }
+  #status { margin-top: 12px; font-size: 14px; color: #b91c1c; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+  <h2>Login</h2>
+  <form id="loginForm">
+    <input type="email" id="email" placeholder="Email" required />
+    <input type="password" id="password" placeholder="Password" required />
+    <button type="submit" id="submitBtn">Log in</button>
+  </form>
+  <div id="status"></div>
+
+  <script>
+    const API_BASE = "http://localhost:5000/api/v1";
+
+    document.getElementById("loginForm").addEventListener("submit", async (e) => {
+      e.preventDefault();
+
+      const email = document.getElementById("email").value;
+      const password = document.getElementById("password").value;
+      const submitBtn = document.getElementById("submitBtn");
+      const status = document.getElementById("status");
+
+      submitBtn.disabled = true;
+      status.textContent = "";
+
+      try {
+        const res = await fetch(`${API_BASE}/users/login`, {
+          method: "POST",
+          credentials: "include", // required so the Set-Cookie from login is stored
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email, password }),
+        });
+
+        const data = await res.json();
+
+        if (!res.ok) {
+          status.textContent = data.message || `Login failed (${res.status})`;
+          submitBtn.disabled = false;
+          return;
+        }
+
+        // Cookie is now set by the server. Navigate (not fetch) into the
+        // DigiLocker flow so the browser attaches the cookie automatically.
+        window.location.href = `${API_BASE}/verification/digilocker/auth`;
+      } catch (err) {
+        status.textContent = "Network error: " + err.message;
+        submitBtn.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>
