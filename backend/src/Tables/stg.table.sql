@@ -1,9 +1,6 @@
 CREATE TYPE doc_verification_type AS ENUM (
   'AADHAAR',
   'PAN',
-  'VOTER_ID',
-  'DRIVING_LICENSE',
-  'FACTORY_LICENSE'
 );
 
 CREATE TYPE doc_verification_status AS ENUM (

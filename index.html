@@ -37,7 +37,7 @@
       try {
         const res = await fetch(`${API_BASE}/users/login`, {
           method: "POST",
-          credentials: "include", // required so the Set-Cookie from login is stored
+          credentials: "include",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password }),
         });
@@ -50,9 +50,7 @@
           return;
         }
 
-        // Cookie is now set by the server. Navigate (not fetch) into the
-        // DigiLocker flow so the browser attaches the cookie automatically.
-        window.location.href = `${API_BASE}/verification/digilocker/auth`;
+        window.location.href = `${API_BASE}/verification/digilocker/auth?selectedDocType=PAN`;
       } catch (err) {
         status.textContent = "Network error: " + err.message;
         submitBtn.disabled = false;

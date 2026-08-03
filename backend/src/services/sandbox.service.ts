@@ -1,4 +1,5 @@
 import axios from "axios";
+import { VerificationDocType } from "../types/auth.type.js";
 
 const BASE_URL = process.env.SANDBOX_BASE_URL || "https://api.sandbox.co.in";
 
@@ -25,7 +26,7 @@ export const getSandboxAccessToken = async (): Promise<string> => {
 
 export const initiateDigiLockerSession = async (
   token: string,
-  docTypes: string[],
+  docType: VerificationDocType,
 ) => {
   try {
     const response = await axios.post(
@@ -33,14 +34,14 @@ export const initiateDigiLockerSession = async (
       {
         "@entity": "in.co.sandbox.kyc.digilocker.session.request",
         flow: "signin",
-        doc_types: docTypes,
+        doc_types: [docType],
         redirect_url:
           process.env.DIGILOCKER_REDIRECT_URI ||
           "http://localhost:5000/api/v1/verification/digilocker/callback",
       },
       {
         headers: {
-          Authorization: token, 
+          Authorization: token,
           "x-api-key": process.env.SANDBOX_API_KEY!,
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
           "Content-Type": "application/json",
@@ -61,7 +62,7 @@ export const getSessionStatus = async (token: string, sessionId: string) => {
       `${BASE_URL}/kyc/digilocker/sessions/${sessionId}/status`,
       {
         headers: {
-          Authorization: token, 
+          Authorization: token,
           "x-api-key": process.env.SANDBOX_API_KEY!,
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
         },
@@ -89,22 +90,53 @@ export const fetchDigiLockerDocument = async (
           "x-api-key": process.env.SANDBOX_API_KEY!,
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
         },
-        responseType: "arraybuffer",
       },
     );
 
-    const mimeType = response.headers["content-type"] || "application/pdf";
-    return { buffer: Buffer.from(response.data), mimeType };
+    const files = response.data?.data?.files || [];
+
+    if (!files.length) {
+      throw new Error(`No files found in Sandbox response for docType: ${docType}`);
+    }
+
+    let selectedFile = files.find(
+      (file: any) =>
+        file.metadata?.ContentType === "application/pdf" ||
+        file.url?.toLowerCase().includes(".pdf"),
+    );
+
+    if (!selectedFile) {
+      selectedFile = files[0];
+    }
+
+    if (!selectedFile?.url) {
+      throw new Error(`Document URL not found for docType: ${docType}`);
+    }
+
+    const fileResponse = await axios.get(selectedFile.url, {
+      responseType: "arraybuffer",
+    });
+
+    const mimeType =
+      selectedFile.metadata?.ContentType ||
+      (selectedFile.url.includes(".pdf") ? "application/pdf" : "application/xml");
+
+    return {
+      buffer: Buffer.from(fileResponse.data),
+      mimeType,
+    };
   } catch (error: any) {
     if (error.response?.data) {
-      const decoded = Buffer.from(error.response.data).toString("utf-8");
-      console.log(
+      const decoded = Buffer.isBuffer(error.response.data)
+        ? Buffer.from(error.response.data).toString("utf-8")
+        : JSON.stringify(error.response.data);
+      console.error(
         "Sandbox fetch document error:",
         error.response.status,
         decoded,
       );
     } else {
-      console.log("error while fetching the document", error.message);
+      console.error("Error while fetching the document:", error.message);
     }
     throw error;
   }
