@@ -32,6 +32,18 @@ export const uploadVerificationDoc = asyncHandler(
       return next(new ApiError(400, "not a valid role for manager"));
     }
 
+    const existingCheck = await pool.query(
+      `SELECT is_doc_verified FROM manager WHERE user_id = $1;`,
+      [userId],
+    );
+
+    if (
+      existingCheck.rows.length > 0 &&
+      existingCheck.rows[0].is_doc_verified
+    ) {
+      return next(new ApiError(409, `manager already verified.`));
+    }
+
     const doc = req.file;
     if (!doc) {
       return next(
