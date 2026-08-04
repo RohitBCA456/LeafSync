@@ -6,4 +6,6 @@ CREATE TABLE IF NOT EXISTS driver (
   verification_doc_url TEXT,
   doc_verification_status VARCHAR(500) DEFAULT 'PENDING';
   requested_garden_manager_id INT
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

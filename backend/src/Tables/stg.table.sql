@@ -17,5 +17,7 @@ CREATE TABLE IF NOT EXISTS stg (
   verification_doc_url TEXT,
   doc_verification_status doc_verification_status DEFAULT 'PENDING'::doc_verification_status,
   is_request_accepted BOOLEAN DEFAULT FALSE,
-  requested_garden_manager_id INT
+  requested_garden_manager_id INT,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

@@ -202,7 +202,8 @@ export const handleCallback = asyncHandler(
             verification_doc_type = EXCLUDED.verification_doc_type,
             verification_doc_url = EXCLUDED.verification_doc_url,
             is_doc_verified = true,
-            doc_verification_status = 'VERIFIED'
+            doc_verification_status = 'VERIFIED',
+            updated_at = NOW()
         RETURNING user_id, verification_doc_type, is_doc_verified, doc_verification_status
       )
       SELECT u.email, u.name, upd.*

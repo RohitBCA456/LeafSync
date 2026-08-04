@@ -139,7 +139,7 @@ export const register = asyncHandler(
       BCRYPT_SALT_ROUNDS,
     );
     await pool.query(
-      `UPDATE users SET refresh_token = $1 WHERE user_id = $2;`,
+      `UPDATE users SET refresh_token = $1, updated_at = NOW() WHERE user_id = $2;`,
       [hashedRefreshToken, user.user_id],
     );
 
@@ -236,7 +236,8 @@ export const updateAvatarUrl = asyncHandler(
       const result = await pool.query(
         `
         UPDATE users 
-        SET avatar_url = $1
+        SET avatar_url = $1,
+        updated_at = NOW()
         WHERE user_id = $2
         RETURNING user_id, avatar_url; 
         `,
@@ -404,7 +405,7 @@ export const login = asyncHandler(
       BCRYPT_SALT_ROUNDS,
     );
     await pool.query(
-      `UPDATE users SET refresh_token = $1 WHERE user_id = $2;`,
+      `UPDATE users SET refresh_token = $1, updated_at = NOW() WHERE user_id = $2;`,
       [hashedRefreshToken, user.user_id],
     );
 
@@ -437,7 +438,7 @@ export const logout = asyncHandler(
     const { userId }: { userId: number } = req.user;
 
     await pool.query(
-      `UPDATE users SET refresh_token = NULL WHERE user_id = $1;`,
+      `UPDATE users SET refresh_token = NULL, updated_at = NOW() WHERE user_id = $1;`,
       [userId],
     );
 
@@ -563,7 +564,9 @@ export const resetPassword = asyncHandler(
     try {
       await pool.query(
         `
-        UPDATE users SET password = $1
+        UPDATE users SET password = $1, 
+        refresh_token = NULL,
+        updated_at = NOW()
         WHERE user_id = $2;
         `,
         [hashedPassword, userId],

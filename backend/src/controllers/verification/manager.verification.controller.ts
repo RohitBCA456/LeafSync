@@ -88,7 +88,10 @@ export const uploadVerificationDoc = asyncHandler(
       INSERT INTO manager (user_id, factory_verification)
       VALUES ($1, $2)
       ON CONFLICT (user_id)
-      DO UPDATE SET factory_verification = EXCLUDED.factory_verification
+      DO UPDATE SET 
+      factory_verification = EXCLUDED.factory_verification, 
+      doc_verification_status = 'VERIFIED',
+      updated_at = NOW()
       RETURNING doc_verification_status, factory_verification;
       `,
       [userId, fileUrl],
