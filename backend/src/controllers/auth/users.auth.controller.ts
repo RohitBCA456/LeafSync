@@ -75,6 +75,20 @@ export const register = asyncHandler(
       );
     }
 
+    const existingUserQuery = await pool.query(
+      `SELECT user_id, email, ph_number FROM users WHERE email = $1 OR ph_number = $2;`,
+      [email.toLowerCase(), ph_number],
+    );
+
+    if (existingUserQuery.rows.length > 0) {
+      return next(
+        new ApiError(
+          409,
+          "User already exists with this email or phone number. Please login instead.",
+        ),
+      );
+    }
+
     const isOtpValid = await verifyOtpCode(email, otp);
     if (!isOtpValid) {
       return next(new ApiError(400, "Invalid or expired OTP code"));

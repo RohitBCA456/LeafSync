@@ -183,7 +183,7 @@ export const handleCallback = asyncHandler(
       );
     }
 
-    const docTypeEnum = docType.toUpperCase();
+    const docTypeEnum = docType.toUpperCase() as VerificationDocType;
     const s3Url = await uploadBufferToS3(userId, buffer, mimeType, docTypeEnum);
 
     const result = await pool.query(

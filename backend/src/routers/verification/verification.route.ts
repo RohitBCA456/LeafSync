@@ -2,8 +2,8 @@ import { Router } from "express";
 import {
   initiateAuth,
   handleCallback,
-} from "../controllers/verification/verification.controller.js";
-import { verifyJWT } from "../middlewares/auth.middleware.js";
+} from "../../controllers/verification/verification.controller.js";
+import { verifyJWT } from "../../middlewares/auth.middleware.js";
 
 const router = Router();
 

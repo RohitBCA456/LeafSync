@@ -1,5 +1,6 @@
 import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
 import crypto from "crypto";
+import { VerificationDocType } from "../types/auth.type.js";
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "ap-south-1",
@@ -9,7 +10,7 @@ export const uploadBufferToS3 = async (
   userId: number,
   fileBuffer: Buffer,
   mimeType: string,
-  docType: string,
+  docType: VerificationDocType,
 ): Promise<string> => {
   const ext = mimeType.includes("xml") ? "xml" : "pdf";
   const uniqueKey = `uploads/digilocker/${userId}/${docType.toLowerCase()}_${crypto.randomUUID()}.${ext}`;

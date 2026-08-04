@@ -2,10 +2,11 @@ import express, { NextFunction, Request, Response } from "express";
 import cors from "cors";
 import dotenv from "dotenv";
 import { CustomCorsOptions } from "./src/types/app.type.js";
-import { userRouter } from "./src/routers/users.auth.route.js";
+import { userRouter } from "./src/routers/auth/users.auth.route.js";
 import path from "path";
 import cookieParser from "cookie-parser";
-import { verificationRouter } from "./src/routers/verification.route.js";
+import { verificationRouter } from "./src/routers/verification/verification.route.js";
+import { managerVerificationRouter } from "./src/routers/verification/manager.verification.route.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -25,6 +26,7 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/verification", verificationRouter);
+app.use("/api/v1/manager/verification", managerVerificationRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;
