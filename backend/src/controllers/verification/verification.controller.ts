@@ -11,6 +11,8 @@ import { uploadBufferToS3 } from "../../services/s3Upload.service.js";
 import { pool } from "../../config/db.config.js";
 import { ApiResponse } from "../../utilities/ApiResponse.js";
 import { role, VerificationDocType } from "../../types/auth.type.js";
+import { redisClient } from "../../config/redis.config.js";
+import { sendVerificationStatusEmail } from "../../services/verificationStatusEmail.service.js";
 
 const ROLE_DOC_CONFIG: Record<string, { docsChoice: string[] }> = {
   stg: {
@@ -20,6 +22,8 @@ const ROLE_DOC_CONFIG: Record<string, { docsChoice: string[] }> = {
     docsChoice: ["driving_license"],
   },
 };
+
+const SESSION_TTL = 15 * 60;
 
 export const initiateAuth = asyncHandler(
   async (
@@ -46,93 +50,89 @@ export const initiateAuth = asyncHandler(
       );
     }
 
-    const docTypeRaw = (req.query.selectedDocType as string)?.toLowerCase(); //uses req.body but for test using req.query
+    const docTypeRaw = (req.query.selectedDocType as string)?.toLowerCase();
 
     const config =
-      ROLE_DOC_CONFIG[userRole.toLocaleLowerCase()] || ROLE_DOC_CONFIG.stg;
+      ROLE_DOC_CONFIG[userRole.toLowerCase()] || ROLE_DOC_CONFIG.stg;
 
-    if (!config?.docsChoice.includes(docTypeRaw) || !docTypeRaw) {
-      return next(new ApiError(404, "selected docs is not supported for stg"));
+    if (!docTypeRaw || !config?.docsChoice.includes(docTypeRaw)) {
+      return next(
+        new ApiError(
+          400,
+          `Selected document is not supported for role: ${userRole}`,
+        ),
+      );
     }
 
-    const docType = docTypeRaw.toLocaleLowerCase() as VerificationDocType;
+    const docType = docTypeRaw.toLowerCase() as VerificationDocType;
     const accessToken = await getSandboxAccessToken();
 
     const sessionData = await initiateDigiLockerSession(accessToken, docType);
+    const sessionId = sessionData.session_id;
 
-    res.cookie("digilocker_session_id", sessionData.session_id, {
-      httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: 15 * 60 * 1000,
+    const redisKey = `digilocker_session:${sessionId}`;
+    const sessionPayload = JSON.stringify({
+      userId,
+      role: userRole,
+      docType,
     });
 
-    res.cookie(
-      "digilocker_user_ctx",
-      JSON.stringify({ userId, role: userRole, docType }),
-      {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === "production",
-        sameSite: "lax",
-        maxAge: 15 * 60 * 1000,
-        signed: true,
-      },
-    );
+    await redisClient.setEx(redisKey, SESSION_TTL, sessionPayload);
+
+    res.cookie("digilocker_session_id", sessionId, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+      maxAge: SESSION_TTL * 1000,
+    });
 
     return res.redirect(sessionData.authorization_url);
   },
 );
 
 export const handleCallback = asyncHandler(
-  async (req: Request, res: Response, next: NextFunction): Promise<Response |  void> => {
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<Response | void> => {
     const sessionId =
-      req.cookies?.digilocker_session_id || req.query.session_id;
-
-    const userCtxRaw = req.signedCookies?.digilocker_user_ctx;
+      (req.query.session_id as string) ||
+      (req.query.state as string) ||
+      req.cookies?.digilocker_session_id;
 
     if (!sessionId || typeof sessionId !== "string") {
       return next(
-        new ApiError(400, "Session ID missing from cookies or request query."),
+        new ApiError(400, "Session ID or state missing from callback request."),
       );
     }
 
-    if (!userCtxRaw) {
-      return next(
-        new ApiError(
-          401,
-          "User context missing or expired. Please restart the verification flow.",
-        ),
-      );
-    }
+    const redisKey = `digilocker_session:${sessionId}`;
+    const cachedContext = await redisClient.get(redisKey);
 
     let userId: number;
-    let role: role;
+    let userRole: role;
     let docType: VerificationDocType;
 
-    try {
-      const parsed = JSON.parse(userCtxRaw);
-      userId = parsed.userId;
-      role = parsed.role;
-      docType = parsed.docType;
-    } catch {
+    if (cachedContext) {
+      try {
+        const parsed = JSON.parse(cachedContext);
+        userId = parsed.userId;
+        userRole = parsed.role;
+        docType = parsed.docType;
+      } catch {
+        return next(new ApiError(401, "Corrupted session context in cache."));
+      }
+    } else {
       return next(
         new ApiError(
           401,
-          "Invalid user context. Please restart the verification flow.",
+          "Verification session expired or invalid. Please restart the process.",
         ),
       );
     }
 
-    if (!userId) {
-      return next(
-        new ApiError(
-          401,
-          "Invalid user context. Please restart the verification flow.",
-        ),
-      );
-    }
-
-    const tableName = role.toLowerCase() === "driver" ? "driver" : "stg";
+    const tableName = userRole.toLowerCase() === "driver" ? "driver" : "stg";
 
     const existingCheck = await pool.query(
       `SELECT is_doc_verified FROM ${tableName} WHERE user_id = $1;`,
@@ -143,13 +143,13 @@ export const handleCallback = asyncHandler(
       existingCheck.rows.length > 0 &&
       existingCheck.rows[0].is_doc_verified
     ) {
+      await redisClient.del(redisKey);
       return next(
         new ApiError(409, `${tableName.toUpperCase()} already verified.`),
       );
     }
 
     const accessToken = await getSandboxAccessToken();
-
     const statusData = await getSessionStatus(accessToken, sessionId);
 
     if (statusData.status !== "succeeded" && statusData.status !== "SUCCESS") {
@@ -162,20 +162,25 @@ export const handleCallback = asyncHandler(
     }
 
     const config =
-      ROLE_DOC_CONFIG[role.toLocaleLowerCase()] || ROLE_DOC_CONFIG.stg;
+      ROLE_DOC_CONFIG[userRole.toLowerCase()] || ROLE_DOC_CONFIG.stg;
 
     if (!config?.docsChoice.includes(docType)) {
-      return next(new ApiError(404, "there is docType mismatch"));
+      await redisClient.del(redisKey);
+      return next(
+        new ApiError(400, "Document type mismatch for role configuration."),
+      );
     }
 
     const { buffer, mimeType } = await fetchDigiLockerDocument(
       accessToken,
       sessionId,
-      docType.toLowerCase(),
+      docType,
     );
 
     if (!mimeType || typeof mimeType !== "string") {
-      return next(new ApiError(400, "unsupport format or mimeType is missing"));
+      return next(
+        new ApiError(400, "Unsupported format or MIME type is missing."),
+      );
     }
 
     const docTypeEnum = docType.toUpperCase();
@@ -183,21 +188,49 @@ export const handleCallback = asyncHandler(
 
     const result = await pool.query(
       `
-      INSERT INTO ${tableName} (user_id, verification_doc_type, verification_doc_url, is_doc_verified, doc_verification_status)
-      VALUES ($1, $2, $3, true, 'VERIFIED')
-      ON CONFLICT (user_id)
-      DO UPDATE SET
-          verification_doc_type = EXCLUDED.verification_doc_type,
-          verification_doc_url = EXCLUDED.verification_doc_url,
-          is_doc_verified = true,
-          doc_verification_status = 'VERIFIED'
-      RETURNING user_id, verification_doc_type, is_doc_verified, doc_verification_status;
+      WITH updated AS (
+        INSERT INTO ${tableName} (
+          user_id, 
+          verification_doc_type, 
+          verification_doc_url, 
+          is_doc_verified, 
+          doc_verification_status
+        )
+        VALUES ($1, $2, $3, true, 'VERIFIED')
+        ON CONFLICT (user_id)
+        DO UPDATE SET
+            verification_doc_type = EXCLUDED.verification_doc_type,
+            verification_doc_url = EXCLUDED.verification_doc_url,
+            is_doc_verified = true,
+            doc_verification_status = 'VERIFIED'
+        RETURNING user_id, verification_doc_type, is_doc_verified, doc_verification_status
+      )
+      SELECT u.email, u.name, upd.*
+      FROM updated upd
+      JOIN users u ON u.user_id = upd.user_id;
       `,
       [userId, docTypeEnum, s3Url],
     );
 
-    res.clearCookie("digilocker_session_id");
-    res.clearCookie("digilocker_user_ctx");
+    await redisClient.del(redisKey);
+
+    res.clearCookie("digilocker_session_id", {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === "production",
+      sameSite: process.env.NODE_ENV === "production" ? "none" : "lax",
+    });
+
+    const record = result.rows[0];
+
+    if (record?.email) {
+      sendVerificationStatusEmail(record.email, {
+        name: record.name,
+        status: record.doc_verification_status,
+        docType: docType,
+      }).catch((error) =>
+        console.log(`failed to send verification email`, error),
+      );
+    }
 
     return res
       .status(201)
@@ -205,7 +238,7 @@ export const handleCallback = asyncHandler(
         new ApiResponse(
           201,
           { dbRecord: result.rows[0], s3Url },
-          "DigiLocker verification completed successfully",
+          "DigiLocker verification completed successfully.",
         ),
       );
   },

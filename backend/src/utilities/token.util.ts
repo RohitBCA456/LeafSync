@@ -10,7 +10,7 @@ const REFRESH_TOKEN_SECRET =
   process.env.REFRESH_TOKEN_SECRET || "default_refresh_token_secret";
 
 export interface TokenPayload {
-  userId: string;
+  userId: number;
   role: role;
 }
 

@@ -27,6 +27,7 @@ export const getSandboxAccessToken = async (): Promise<string> => {
 export const initiateDigiLockerSession = async (
   token: string,
   docType: VerificationDocType,
+  queryParams?: Record<string, any>,
 ) => {
   try {
     const response = await axios.post(
@@ -46,6 +47,7 @@ export const initiateDigiLockerSession = async (
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
           "Content-Type": "application/json",
         },
+        params: queryParams, 
       },
     );
 
@@ -56,7 +58,11 @@ export const initiateDigiLockerSession = async (
   }
 };
 
-export const getSessionStatus = async (token: string, sessionId: string) => {
+export const getSessionStatus = async (
+  token: string, 
+  sessionId: string,
+  queryParams?: Record<string, any>
+) => {
   try {
     const response = await axios.get(
       `${BASE_URL}/kyc/digilocker/sessions/${sessionId}/status`,
@@ -66,6 +72,7 @@ export const getSessionStatus = async (token: string, sessionId: string) => {
           "x-api-key": process.env.SANDBOX_API_KEY!,
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
         },
+        params: queryParams,
       },
     );
 
@@ -80,6 +87,7 @@ export const fetchDigiLockerDocument = async (
   token: string,
   sessionId: string,
   docType: string,
+  queryParams?: Record<string, any>
 ) => {
   try {
     const response = await axios.get(
@@ -90,6 +98,7 @@ export const fetchDigiLockerDocument = async (
           "x-api-key": process.env.SANDBOX_API_KEY!,
           "x-api-version": process.env.SANDBOX_API_VERSION || "1.0",
         },
+        params: queryParams,
       },
     );
 
