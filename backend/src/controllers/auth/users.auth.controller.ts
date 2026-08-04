@@ -518,3 +518,64 @@ export const getCurrentUser = asyncHandler(
       .json(new ApiResponse(200, user, "User profile fetched successfully"));
   },
 );
+
+export const resetPassword = asyncHandler(
+  async (
+    req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<Response | void> => {
+    let userId = req.user?.userId;
+
+    if (!userId) {
+      return next(new ApiError(401, "user is not authenticated"));
+    }
+
+    const {
+      currentPassword,
+      newPassword,
+    }: { currentPassword: string; newPassword: string } = req.body;
+
+    const dbRecord = await pool.query(
+      `
+      SELECT password FROM users WHERE user_id = $1;
+      `,
+      [userId],
+    );
+
+    const user = dbRecord.rows[0];
+
+    if (!user) {
+      return next(new ApiError(404, "user not found"));
+    }
+
+    const isPasswordValid = await bcrypt.compare(
+      currentPassword,
+      user?.password,
+    );
+
+    if (!isPasswordValid) {
+      return next(new ApiError(400, "invalid password"));
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, BCRYPT_SALT_ROUNDS);
+
+    try {
+      await pool.query(
+        `
+        UPDATE users SET password = $1
+        WHERE user_id = $2;
+        `,
+        [hashedPassword, userId],
+      );
+    } catch (error) {
+      return next(
+        new ApiError(500, "error while updating password", error as any),
+      );
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, "password reset successfully"));
+  },
+);
