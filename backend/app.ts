@@ -7,6 +7,7 @@ import path from "path";
 import cookieParser from "cookie-parser";
 import { verificationRouter } from "./src/routers/verification/verification.route.js";
 import { managerVerificationRouter } from "./src/routers/verification/manager.verification.route.js";
+import { requestRouter } from "./src/routers/request/request.route.js";
 
 dotenv.config({ path: path.resolve(process.cwd(), ".env") });
 
@@ -27,6 +28,7 @@ app.use(cookieParser(process.env.COOKIE_SECRET));
 app.use("/api/v1/users", userRouter);
 app.use("/api/v1/verification", verificationRouter);
 app.use("/api/v1/manager/verification", managerVerificationRouter);
+app.use("/api/v1/request", requestRouter);
 
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
   const statusCode = err.statusCode || 500;

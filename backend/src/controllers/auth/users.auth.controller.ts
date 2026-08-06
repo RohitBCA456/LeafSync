@@ -89,10 +89,10 @@ export const register = asyncHandler(
       );
     }
 
-    const isOtpValid = await verifyOtpCode(email, otp);
-    if (!isOtpValid) {
-      return next(new ApiError(400, "Invalid or expired OTP code"));
-    }
+    // const isOtpValid = await verifyOtpCode(email, otp);
+    // if (!isOtpValid) {
+    //   return next(new ApiError(400, "Invalid or expired OTP code"));
+    // }
 
     const hashPassword = await bcrypt.hash(password, BCRYPT_SALT_ROUNDS);
 

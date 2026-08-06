@@ -37,13 +37,13 @@ export const initiateAuth = asyncHandler(
     const tableName = userRole.toLowerCase() === "driver" ? "driver" : "stg";
 
     const existingCheck = await pool.query(
-      `SELECT is_doc_verified FROM ${tableName} WHERE user_id = $1;`,
+      `SELECT doc_verification_status FROM ${tableName} WHERE user_id = $1;`,
       [userId],
     );
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].is_doc_verified
+      existingCheck.rows[0].doc_verification_status === "VERIFIED"
     ) {
       return next(
         new ApiError(409, `${userRole.toUpperCase()} already verified.`),
@@ -135,13 +135,13 @@ export const handleCallback = asyncHandler(
     const tableName = userRole.toLowerCase() === "driver" ? "driver" : "stg";
 
     const existingCheck = await pool.query(
-      `SELECT is_doc_verified FROM ${tableName} WHERE user_id = $1;`,
+      `SELECT doc_verification_status FROM ${tableName} WHERE user_id = $1;`,
       [userId],
     );
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].is_doc_verified
+      existingCheck.rows[0].doc_verification_status === "VERIFIED"
     ) {
       await redisClient.del(redisKey);
       return next(
@@ -193,7 +193,6 @@ export const handleCallback = asyncHandler(
           user_id, 
           verification_doc_type, 
           verification_doc_url, 
-          is_doc_verified, 
           doc_verification_status
         )
         VALUES ($1, $2, $3, true, 'VERIFIED')
@@ -201,10 +200,9 @@ export const handleCallback = asyncHandler(
         DO UPDATE SET
             verification_doc_type = EXCLUDED.verification_doc_type,
             verification_doc_url = EXCLUDED.verification_doc_url,
-            is_doc_verified = true,
             doc_verification_status = 'VERIFIED',
             updated_at = NOW()
-        RETURNING user_id, verification_doc_type, is_doc_verified, doc_verification_status
+        RETURNING user_id, verification_doc_type, doc_verification_status
       )
       SELECT u.email, u.name, upd.*
       FROM updated upd

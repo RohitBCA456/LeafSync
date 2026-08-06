@@ -12,7 +12,6 @@ CREATE TYPE doc_verification_status AS ENUM (
 CREATE TABLE IF NOT EXISTS stg (
   stg_id SERIAL PRIMARY KEY,
   user_id INT UNIQUE NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-  is_doc_verified BOOLEAN DEFAULT FALSE,
   verification_doc_type doc_verification_type,
   verification_doc_url TEXT,
   doc_verification_status doc_verification_status DEFAULT 'PENDING'::doc_verification_status,

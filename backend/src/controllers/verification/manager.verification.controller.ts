@@ -33,13 +33,13 @@ export const uploadVerificationDoc = asyncHandler(
     }
 
     const existingCheck = await pool.query(
-      `SELECT is_doc_verified FROM manager WHERE user_id = $1;`,
+      `SELECT doc_verification_status FROM manager WHERE user_id = $1;`,
       [userId],
     );
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].is_doc_verified
+      existingCheck.rows[0].doc_verification_status === "VERIFIED"
     ) {
       return next(new ApiError(409, `manager already verified.`));
     }
