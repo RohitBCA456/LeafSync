@@ -43,7 +43,7 @@ export const initiateAuth = asyncHandler(
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].doc_verification_status === "VERIFIED"
+      existingCheck.rows[0].doc_verification_status === 'VERIFIED'
     ) {
       return next(
         new ApiError(409, `${userRole.toUpperCase()} already verified.`),
@@ -141,7 +141,7 @@ export const handleCallback = asyncHandler(
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].doc_verification_status === "VERIFIED"
+      existingCheck.rows[0].doc_verification_status === 'VERIFIED'
     ) {
       await redisClient.del(redisKey);
       return next(

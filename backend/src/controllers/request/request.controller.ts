@@ -4,6 +4,7 @@ import { ApiError } from "../../utilities/ApiError.util.js";
 import { redisClient } from "../../config/redis.config.js";
 import { pool } from "../../config/db.config.js";
 import { ApiResponse } from "../../utilities/ApiResponse.js";
+import { role } from "../../types/auth.type.js";
 
 type FactoryResponse = {
   manager_id: number;
@@ -114,5 +115,78 @@ export const listOfAllNearByFactories = asyncHandler(
           "Nearby factories retrieved successfully",
         ),
       );
+  },
+);
+
+type StatusUpdateRequest = {
+  userId: number;
+  role: role;
+  status: "ACCEPTED" | "REJECTED";
+};
+
+export const updateRequestStatus = asyncHandler(
+  async (
+    req: Request<{}, {}, StatusUpdateRequest>,
+    res: Response,
+    next: NextFunction,
+  ): Promise<Response | void> => {
+    const { userId, role, status } = req.body;
+    const manager_id = req.user?.userId;
+    const isRoleManager = req.user?.role;
+
+    if (!manager_id && isRoleManager?.toLocaleLowerCase() !== "manager") {
+      return next(new ApiError(401, "unauthenticated user"));
+    }
+
+    if (!userId || !role || !status) {
+      return next(
+        new ApiError(400, "userId, role and status field is missing"),
+      );
+    }
+
+    const normalizedRole = role.toLocaleLowerCase().trim();
+    if (!["stg", "driver"].includes(normalizedRole)) {
+      return next(
+        new ApiError(
+          400,
+          "Invalid role. Role must be either 'stg' or 'driver'",
+        ),
+      );
+    }
+
+    const normalizeStatus = status.toUpperCase().trim();
+    if (!["ACCEPTED", "REJECTED"].includes(normalizeStatus)) {
+      return next(
+        new ApiError(
+          400,
+          "Invalid status type. Allowed: 'ACCEPTED', 'REJECTED'",
+        ),
+      );
+    }
+
+    const tableName = normalizedRole === "driver" ? "driver" : "stg";
+
+    const dbResult = await pool.query(
+      `
+      UPDATE ${tableName} SET request_status = $1, 
+      requested_garden_manager_id = $2,
+      updated_at = NOW()
+      WHERE user_id = $3
+      RETURNING *;
+      `,
+      [status.toUpperCase(), manager_id, userId],
+    );
+
+    const queryData = dbResult.rows[0];
+
+    if (!queryData) {
+      return next(
+        new ApiError(404, `no ${normalizedRole} found for user_id ${userId}`),
+      );
+    }
+
+    return res
+      .status(200)
+      .json(new ApiResponse(200, queryData, "status updated successfully"));
   },
 );

@@ -39,7 +39,7 @@ export const uploadVerificationDoc = asyncHandler(
 
     if (
       existingCheck.rows.length > 0 &&
-      existingCheck.rows[0].doc_verification_status === "VERIFIED"
+      existingCheck.rows[0].doc_verification_status === 'VERIFIED'
     ) {
       return next(new ApiError(409, `manager already verified.`));
     }
