@@ -131,10 +131,10 @@ export const updateRequestStatus = asyncHandler(
     next: NextFunction,
   ): Promise<Response | void> => {
     const { userId, role, status } = req.body;
-    const manager_id = req.user?.userId;
+    const manager_user_id = req.user?.userId;
     const isRoleManager = req.user?.role;
 
-    if (!manager_id && isRoleManager?.toLocaleLowerCase() !== "manager") {
+    if (!manager_user_id || isRoleManager?.toLocaleLowerCase() !== "manager") {
       return next(new ApiError(401, "unauthenticated user"));
     }
 
@@ -166,27 +166,107 @@ export const updateRequestStatus = asyncHandler(
 
     const tableName = normalizedRole === "driver" ? "driver" : "stg";
 
-    const dbResult = await pool.query(
+    const managerData = await pool.query(
       `
+      SELECT manager_id FROM manager WHERE user_id = $1;
+      `,
+      [manager_user_id],
+    );
+
+    let manager_id = null;
+    if (managerData) {
+      manager_id = managerData.rows[0].manager_id;
+    }
+
+    const client = await pool.connect();
+    try {
+      await client.query("BEGIN");
+      const dbResult = await client.query(
+        `
       UPDATE ${tableName} SET request_status = $1, 
       requested_garden_manager_id = $2,
       updated_at = NOW()
       WHERE user_id = $3
       RETURNING *;
       `,
-      [status.toUpperCase(), manager_id, userId],
-    );
-
-    const queryData = dbResult.rows[0];
-
-    if (!queryData) {
-      return next(
-        new ApiError(404, `no ${normalizedRole} found for user_id ${userId}`),
+        [status.toUpperCase(), manager_id, userId],
       );
-    }
 
-    return res
-      .status(200)
-      .json(new ApiResponse(200, queryData, "status updated successfully"));
+      const queryData = dbResult.rows[0];
+
+      if (!queryData) {
+        await client.query("ROLLBACK");
+        return next(
+          new ApiError(404, `no ${normalizedRole} found for user_id ${userId}`),
+        );
+      }
+
+      let assignedDriver = null;
+
+      if (normalizeStatus === "ACCEPTED" && normalizedRole === "stg") {
+        const dbQuery = await client.query(
+          `
+            WITH target_stg AS (
+            SELECT location FROM users
+            WHERE user_id = $1
+            ),
+            nearest_driver AS (
+            SELECT u.location, 
+            d.driver_id,
+            ST_Distance(u.location::geography, t.location::geography) AS distance_meters
+            FROM driver d
+            JOIN users u ON d.user_id = u.user_id
+            CROSS JOIN target_stg t
+            WHERE d.doc_verification_status = 'VERIFIED' AND
+            d.requested_garden_manager_id = $2 AND
+            ST_DWithin(u.location::geography, t.location::geography, 10000)
+            )
+            SELECT * FROM nearest_driver
+            ORDER BY distance_meters ASC
+            LIMIT 1
+            `,
+          [userId, manager_id],
+        );
+
+        assignedDriver = dbQuery.rows[0];
+        if (assignedDriver) {
+          await client.query(
+            `
+            INSERT INTO driver_stg_assignments(driver_id, stg_id, manager_id, distance, status)
+            VALUES($1, $2, $3, $4, 'ACTIVE')
+            `,
+            [
+              assignedDriver.driver_id,
+              queryData.stg_id,
+              manager_id,
+              assignedDriver.distance_meters,
+            ],
+          );
+        }
+      }
+
+      await client.query("COMMIT");
+      return res.status(201).json(
+        new ApiResponse(
+          201,
+          {
+            queryData,
+            assignedDriver,
+          },
+          "assigned driver to stg successfully",
+        ),
+      );
+    } catch (error) {
+      await client.query("ROLLBACK");
+      return next(
+        new ApiError(
+          500,
+          "internal server error while updating request status",
+          error as any,
+        ),
+      );
+    } finally {
+      client.release();
+    }
   },
 );
